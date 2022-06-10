@@ -22,14 +22,16 @@ import { FormattedMessage } from '@kbn/i18n-react';
 import { CoreStart } from '@kbn/core/public';
 import { i18n } from '@kbn/i18n';
 import {
-  RedirectAppLinks,
   useKibana,
-  KibanaPageTemplate,
   KibanaPageTemplateSolutionNavAvatar,
-  KibanaPageTemplateProps,
   overviewPageActions,
   OverviewPageFooter,
 } from '@kbn/kibana-react-plugin/public';
+import { KibanaPageTemplate, KibanaPageTemplateProps } from '@kbn/shared-ux-components';
+import {
+  RedirectAppLinksContainer as RedirectAppLinks,
+  RedirectAppLinksKibanaProvider,
+} from '@kbn/shared-ux-link-redirect-app';
 import { FetchResult } from '@kbn/newsfeed-plugin/public';
 import {
   FeatureCatalogueEntry,
@@ -89,7 +91,7 @@ export const Overview: FC<Props> = ({ newsFetchResult, solutions, features }) =>
       defaultMessage: `Welcome to Analytics!`,
     }),
     logo: 'logoKibana',
-    actions: {
+    action: {
       elasticAgent: {
         title: i18n.translate('kibanaOverview.noDataConfig.title', {
           defaultMessage: 'Add integrations',
@@ -111,9 +113,9 @@ export const Overview: FC<Props> = ({ newsFetchResult, solutions, features }) =>
 
   useEffect(() => {
     const fetchIsNewKibanaInstance = async () => {
-      const hasUserIndexPattern = await dataViews.hasUserDataView().catch(() => true);
-
-      setNewKibanaInstance(!hasUserIndexPattern);
+      const hasUserDataView = await dataViews.hasData.hasUserDataView().catch(() => true);
+      const hasESData = await dataViews.hasData.hasESData().catch(() => false);
+      setNewKibanaInstance((!hasUserDataView && hasESData) || !hasESData);
       setIsLoading(false);
     };
 
@@ -125,21 +127,33 @@ export const Overview: FC<Props> = ({ newsFetchResult, solutions, features }) =>
 
     return app ? (
       <EuiFlexItem className="kbnOverviewApps__item" key={appId}>
-        <RedirectAppLinks application={application}>
-          <EuiCard
-            description={app?.subtitle || ''}
-            href={addBasePath(app.path)}
-            onClick={() => {
-              trackUiMetric(METRIC_TYPE.CLICK, `app_card_${appId}`);
-            }}
-            image={addBasePath(
-              `/plugins/${PLUGIN_ID}/assets/kibana_${appId}_${IS_DARK_THEME ? 'dark' : 'light'}.svg`
-            )}
-            title={app.title}
-            titleElement="h3"
-            titleSize="s"
-          />
-        </RedirectAppLinks>
+        <RedirectAppLinksKibanaProvider
+          coreStart={{
+            application: {
+              currentAppId$: application.currentAppId$,
+              navigateToUrl: application.navigateToUrl,
+            },
+          }}
+          {...application}
+        >
+          <RedirectAppLinks>
+            <EuiCard
+              description={app?.subtitle || ''}
+              href={addBasePath(app.path)}
+              onClick={() => {
+                trackUiMetric(METRIC_TYPE.CLICK, `app_card_${appId}`);
+              }}
+              image={addBasePath(
+                `/plugins/${PLUGIN_ID}/assets/kibana_${appId}_${
+                  IS_DARK_THEME ? 'dark' : 'light'
+                }.svg`
+              )}
+              title={app.title}
+              titleElement="h3"
+              titleSize="s"
+            />
+          </RedirectAppLinks>
+        </RedirectAppLinksKibanaProvider>
       </EuiFlexItem>
     ) : null;
   };
@@ -243,27 +257,37 @@ export const Overview: FC<Props> = ({ newsFetchResult, solutions, features }) =>
                 <EuiFlexGroup className="kbnOverviewMore__content">
                   {solutions.map(({ id, title, description, icon, path }) => (
                     <EuiFlexItem className="kbnOverviewMore__item" key={id}>
-                      <RedirectAppLinks application={application}>
-                        <EuiCard
-                          className={`kbnOverviewSolution ${id}`}
-                          description={description ? description : ''}
-                          href={addBasePath(path)}
-                          icon={
-                            <KibanaPageTemplateSolutionNavAvatar
-                              name={title}
-                              iconType={icon}
-                              size="xl"
-                            />
-                          }
-                          image={addBasePath(getSolutionGraphicURL(snakeCase(id)))}
-                          title={title}
-                          titleElement="h3"
-                          titleSize="xs"
-                          onClick={() => {
-                            trackUiMetric(METRIC_TYPE.CLICK, `solution_panel_${id}`);
-                          }}
-                        />
-                      </RedirectAppLinks>
+                      <RedirectAppLinksKibanaProvider
+                        coreStart={{
+                          application: {
+                            currentAppId$: application.currentAppId$,
+                            navigateToUrl: application.navigateToUrl,
+                          },
+                        }}
+                        {...application}
+                      >
+                        <RedirectAppLinks>
+                          <EuiCard
+                            className={`kbnOverviewSolution ${id}`}
+                            description={description ? description : ''}
+                            href={addBasePath(path)}
+                            icon={
+                              <KibanaPageTemplateSolutionNavAvatar
+                                name={title}
+                                iconType={icon}
+                                size="xl"
+                              />
+                            }
+                            image={addBasePath(getSolutionGraphicURL(snakeCase(id)))}
+                            title={title}
+                            titleElement="h3"
+                            titleSize="xs"
+                            onClick={() => {
+                              trackUiMetric(METRIC_TYPE.CLICK, `solution_panel_${id}`);
+                            }}
+                          />
+                        </RedirectAppLinks>
+                      </RedirectAppLinksKibanaProvider>
                     </EuiFlexItem>
                   ))}
                 </EuiFlexGroup>
